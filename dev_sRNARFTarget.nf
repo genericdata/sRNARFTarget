@@ -30,6 +30,7 @@ import pickle
 import pandas as pd
 from Bio import SeqIO
 import os
+import pyarrow
 
 fileout="pairs_names_seqs.pkl"
 if os.path.exists(fileout):
@@ -57,57 +58,59 @@ process1result.into{setResult1; setResult11; setResult111}
 
 process getsRNATrinucleotidesFrequncies{
 
-input:
-file nsfile from setResult1
-
 output:
 file 'sRNA_3mer.txt' into process2result
 
 script:
 """
 #!/usr/bin/env python3
-from pprint import pprint
 from skbio import Sequence
 from itertools import product
-from sklearn.utils import shuffle
 import pandas as pd
 import numpy as np
+import pickle
+import os
 
-
-data1 = pd.read_csv('$nsfile', sep='\t', header=0)
-df = pd.DataFrame(data = data1)
-sequences = df.iloc[:, 2].values #third column sRNA sequences
-
-seqarr = []
-
-for item in sequences:
-    number = 1
-    s = Sequence(item)
-    freqs = s.kmer_frequencies(3, relative=True, overlap=True)
-    seqarr.append(freqs)
-    number = number + 1
+def versiontuple(v):
+    return tuple(map(int, (v.split("."))))
 
 def all_kmer_subsets(ss=["A", "T", "G", "C"]):
     return [''.join(p) for p in product(ss, repeat=3)]
 
 kmer_combinations = all_kmer_subsets()
 
-df1 = pd.DataFrame(seqarr) #convert dicionary to dataframe
-rows = len(df1.index)
-cols = len(kmer_combinations)
-d = np.zeros(shape=(rows,cols))
-df2 = pd.DataFrame(data = d, columns=kmer_combinations)
-df3 = pd.DataFrame()
+with open("$mrna", 'r') as fp:
+    for count, line in enumerate(fp):
+        pass
+count=int((count+1)/2)
 
-for col in kmer_combinations:
-    if col in df1.columns:
-        df3[col] = df1[col]
-    else:
-        df3[col] = df2[col]
+fileout="sRNA_3mer.pkl"
+if os.path.exists(fileout):
+  os.remove(fileout)
 
-df3 = df3.fillna(0) #fill empty columns with zero (replace NaN with 0)
+df = pd.DataFrame(columns=kmer_combinations)
 
-df3.to_csv('sRNA_3mer.txt', header=True, index=False, sep='\t', mode='a')
+if versiontuple(pd.__version__) >= versiontuple("1.4.0"):
+   engine="pyarrow"
+else:
+   engine="c"
+
+
+chunksize = 500
+i=0
+dictionary_list=[]
+for chunk in pd.read_csv("$srna", engine=engine, chunksize=chunksize, skiprows=lambda x: (x != 0) and not x % 2):
+  print("Completed", chunksize * i, flush=True)
+  for index, row in chunk.iterrows():
+      s = Sequence(row[0])
+      freqs = s.kmer_frequencies(3, relative=True, overlap=True)
+      dictionary_list.append(freqs)
+  i=i+1
+
+df = df.append(dictionary_list,ignore_index=True).fillna(0)
+df = pd.DataFrame(np.repeat(df.values, count, axis=0), columns=kmer_combinations)
+df = df.round(8) # We round to 5 in last process. Rounding now reduces size and increase performance
+df.to_pickle(fileout)
 
 """
 }
