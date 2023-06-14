@@ -232,11 +232,11 @@ process3Bresult.into{setResult3B; setResult33B}
 process runRandomForestModel{
 
 input:
-file newdata from setResult3
+file diffpkl from setResult3B
 file lrf from ldedmodel
 
 output:
-file 'Results_pred_probs.txt' into process5result
+file 'Results_pred_probs.npy' into process5result
 
 script:
 """
@@ -244,25 +244,27 @@ script:
 import pandas as pd
 import numpy  as np
 import pickle
+import os
+import gc
 
-def pred_prob(testdf):
-    # load the saved random forest model from disk
-    loaded_RFmodel = pickle.load(open('$lrf', 'rb'))
-    #predict probabilities for class 1
-    predict_proba = loaded_RFmodel.predict_proba(testdf)
-    print(predict_proba)
-    #write probabilities to file
-    for i in predict_proba:
-        with open('Results_pred_probs.txt','a') as fd:
-            fd.write(str(i[1])+"\\n")
-    print(predict_proba[:, 1])
-    return predict_proba[:, 1]
+fileout="Results_pred_probs"
+if os.path.exists(fileout + ".npy"):
+  os.remove(fileout + ".npy")
 
-testdata = pd.read_csv('$newdata', sep='\t', header=0)
-testdf = pd.DataFrame(data = testdata)
-testdf = testdf.fillna(0)
+diff = pd.read_pickle(diffpkl)
 
-pred_prob(testdf)
+# load the saved random forest model from disk
+loaded_RFmodel = pickle.load(open(lrf, 'rb'))
+
+#predict probabilities for class 1
+predict_proba = loaded_RFmodel.predict_proba(diff.fillna(0))
+
+del loaded_RFmodel
+del testdf 
+gc.collect()
+
+#write probabilities to file
+np.save(fileout, predict_proba[:, 1], allow_pickle=True, fix_imports=True)
 """
 }
 process5result.set{setResult5}
