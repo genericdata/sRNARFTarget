@@ -120,73 +120,122 @@ process2result.set{setResult2}
 //-------------------------Process_3---------------------------//
 process getmRNATrinucleotidesFrequncies{
 
-input:
-file sRNas from setResult2
-file ns2file from setResult11
+  output:
+  file 'mRNA_3mer.txt' into process3result
 
-output:
-file '3merdifference.txt' into process3result
+  script:
+  """
+  #!/scratch/jco324/sRNA_targeting/bin/python3
+  #from pprint import pprint
+  from skbio import Sequence
+  from itertools import product
+  import pandas as pd
+  #import numpy as np
 
-script:
+  def all_kmer_subsets(ss=["A", "T", "G", "C"]):
+      return [''.join(p) for p in product(ss, repeat=3)]
+
+  kmer_combinations = all_kmer_subsets()
+
+  with open("$srna", 'r') as fp:
+      for scount, line in enumerate(fp):
+          pass
+  scount=int((scount+1)/2)
+
+  with open("$mrna", 'r') as fp:
+      for mcount, line in enumerate(fp):
+          pass
+  mcount=(mcount+1)/2
+
+  fileout="mRNA_3mer.txt"
+
+  # Create a 0x64 dataframe
+  dfn = pd.DataFrame(columns=kmer_combinations)
+  header = True
+  chunksize = 100
+  seqarr = []
+  i=0
+  for chunk in pd.read_csv("$mrna", chunksize=chunksize, header=0, skiprows=lambda x: (x != 0) and not x % 2):
+      print("Completed", chunksize * i, flush=True)
+      for index, row in chunk.iterrows():
+          s = Sequence(row[0])
+          freqs = s.kmer_frequencies(3, relative=True, overlap=True)
+          seqarr.append(freqs)
+          dfn = pd.concat([dfn, pd.DataFrame(freqs, index=[0])], ignore_index=True).fillna(0)
+      i=i+1
+
+  print("dataframe =",dfn.shape, flush=True)
+  print("Writing dataframe to", fileout, scount, "times", flush=True)
+
+  for x in range(scount):
+      if x % 100 == 0:
+          print(x , "of" , scount, flush=True)
+      dfn.to_csv(fileout, header=header, mode='a', index=False)
+      header = False
+
+  #with open(fileout, 'r') as fp:
+  #    for count, line in enumerate(fp):
+  #        pass
+  #count=(count+1)
+  #print(count, flush=True)
 """
-#!/usr/bin/env python3
+}
+//Collect file
+process3result.into{setResult3; setResult33}
 
-from pprint import pprint
-from skbio import Sequence
-from itertools import product
-import pandas as pd
-import numpy as np
+//-------------------------Process_3B---------------------------//
+process getDifference{
 
-data1 = pd.read_csv('$ns2file', sep='\t', header=0)
-df = pd.DataFrame(data = data1)
+  input:
+  file sRNas from setResult2
+  file mRNas from setResult3
 
-sequences = df.iloc[:, 3].values #fourth column mRNA sequences
+  output:
+  file '3merdifference.pkl' into process3Bresult
 
-seqarr = []
+  script:
+  """
+  #!/scratch/jco324/sRNA_targeting/bin/python3
 
-for item in sequences:
-    number = 1
-    s = Sequence(item)
-    freqs = s.kmer_frequencies(3, relative=True, overlap=True)
-    seqarr.append(freqs)
-    number = number + 1
+  from pprint import pprint
+  from skbio import Sequence
+  from itertools import product
+  import pandas as pd
+  import numpy as np
+  import time
+  import pyarrow
+  import gc
 
-def all_kmer_subsets(ss=["A", "T", "G", "C"]):
-    return [''.join(p) for p in product(ss, repeat=3)]
+  start = time.process_time()
+  sRNAdf = pd.read_csv('$sRNas', engine="pyarrow")
+  print(time.process_time() - start, "sRNAdf read in", flush=True)
+  #sRNAdf  = pd.DataFrame(data = sRNA)
+  print(sRNAdf.info(verbose=False), flush=True)
 
-kmer_combinations = all_kmer_subsets()
+  start = time.process_time()
+  mRNAdf = pd.read_csv('$mRNas', engine="pyarrow")
+  print(time.process_time() - start, "mRNAdf read in", flush=True)
 
-df1 = pd.DataFrame(seqarr) #convert dicionary to dataframe
-rows = len(df1.index)
-cols = len(kmer_combinations)
-d = np.zeros(shape=(rows,cols))
-df2 = pd.DataFrame(data = d, columns=kmer_combinations)
-df3 = pd.DataFrame()
+  #mRNAdf  = pd.DataFrame(data = mRNA)
+  print(mRNAdf.info(verbose=False), flush=True)
 
-for col in kmer_combinations:
-    if col in df1.columns:
-        df3[col] = df1[col]
-    else:
-        df3[col] = df2[col]
+  start = time.process_time()
+  output8 = mRNAdf.subtract(sRNAdf)
+  print(time.process_time() - start, "output8 subtracted", flush=True)
+  print(output8.info(verbose=False), flush=True)
+  del mRNAdf
+  del sRNAdf
+  gc.collect()
 
-df3 = df3.fillna(0) #fill empty columns with zero (replace NaN with 0)
-
-df3.to_csv('mRNA_3mer.txt', header=True, index=False, sep='\t', mode='a')
-
-sRNA = pd.read_csv('$sRNas', sep='\t')
-sRNAdf  = pd.DataFrame(data = sRNA)
-
-mRNA = pd.read_csv('mRNA_3mer.txt', sep='\t')
-mRNAdf  = pd.DataFrame(data = mRNA)
-
-output8 = mRNAdf.subtract(sRNAdf)
-output8.to_csv('3merdifference.txt', header=True, index=False, sep='\t', mode='a')
+  #output8.to_csv('3merdifference.txt', header=True, index=False, sep='\t', mode='a')
+  start = time.process_time()
+  output8.to_pickle('3merdifference.pkl')
+  print(time.process_time() - start, "wrote pickle", flush=True)
 """
 
 }
-
 //Collect file
-process3result.into{setResult3; setResult33}
+process3Bresult.into{setResult3B; setResult33B}
 
 //-------------------------Process_4---------------------------//
 
