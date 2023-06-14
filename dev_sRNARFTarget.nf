@@ -125,8 +125,7 @@ process getmRNATrinucleotidesFrequncies{
 
   script:
   """
-  #!/scratch/jco324/sRNA_targeting/bin/python3
-  #from pprint import pprint
+  #!/usr/bin/env python3
   from skbio import Sequence
   from itertools import product
   import pandas as pd
@@ -148,7 +147,6 @@ process getmRNATrinucleotidesFrequncies{
   mcount=(mcount+1)/2
 
   fileout="mRNA_3mer.txt"
-
   # Create a 0x64 dataframe
   dfn = pd.DataFrame(columns=kmer_combinations)
   header = True
@@ -172,12 +170,6 @@ process getmRNATrinucleotidesFrequncies{
           print(x , "of" , scount, flush=True)
       dfn.to_csv(fileout, header=header, mode='a', index=False)
       header = False
-
-  #with open(fileout, 'r') as fp:
-  #    for count, line in enumerate(fp):
-  #        pass
-  #count=(count+1)
-  #print(count, flush=True)
 """
 }
 //Collect file
@@ -195,42 +187,40 @@ process getDifference{
 
   script:
   """
-  #!/scratch/jco324/sRNA_targeting/bin/python3
-
-  from pprint import pprint
-  from skbio import Sequence
-  from itertools import product
+  #!/usr/bin/env python3
   import pandas as pd
-  import numpy as np
-  import time
   import pyarrow
   import gc
+  import os
+  import pickle
 
-  start = time.process_time()
-  sRNAdf = pd.read_csv('$sRNas', engine="pyarrow")
-  print(time.process_time() - start, "sRNAdf read in", flush=True)
-  #sRNAdf  = pd.DataFrame(data = sRNA)
-  print(sRNAdf.info(verbose=False), flush=True)
+  fileout="3merdifference.pkl"
+  if os.path.exists(fileout):
+    os.remove(fileout)
+    
+  def versiontuple(v):
+    return tuple(map(int, (v.split("."))))
 
-  start = time.process_time()
-  mRNAdf = pd.read_csv('$mRNas', engine="pyarrow")
-  print(time.process_time() - start, "mRNAdf read in", flush=True)
+  # Read in mRNAdf
+  if versiontuple(pd.__version__) >= versiontuple("1.4.0"):
+    engine="pyarrow"
+  else:
+    engine="c"
+  
+  mRNAdf = pd.read_csv(mRNas, engine=engine)
+  
+  sRNAdf = pd.read_pickle(sRNas)
+  diff = mRNAdf.subtract(sRNAdf)
 
-  #mRNAdf  = pd.DataFrame(data = mRNA)
-  print(mRNAdf.info(verbose=False), flush=True)
-
-  start = time.process_time()
-  output8 = mRNAdf.subtract(sRNAdf)
-  print(time.process_time() - start, "output8 subtracted", flush=True)
-  print(output8.info(verbose=False), flush=True)
+  # Clean up
   del mRNAdf
   del sRNAdf
   gc.collect()
 
-  #output8.to_csv('3merdifference.txt', header=True, index=False, sep='\t', mode='a')
-  start = time.process_time()
-  output8.to_pickle('3merdifference.pkl')
-  print(time.process_time() - start, "wrote pickle", flush=True)
+  # Write out to pickle
+  diff.to_pickle(fileout)
+  #output8.to_csv(fileout, header=True, index=False, sep='\t', mode='a')
+
 """
 
 }
