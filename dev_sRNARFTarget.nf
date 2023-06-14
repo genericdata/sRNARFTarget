@@ -20,37 +20,37 @@ exit 1, "The specified input mRNA fasta file does not exist: ${params.m}"
 
 process createAllPossiblePairs{
 
-output:
-file 'pairs_names_seqs.pkl' into process1result mode flatten
+  output:
+  file 'pairs_names_seqs.pkl' into process1result mode flatten
 
-script:
-"""
-#!/usr/bin/env python3
-import pickle
-import pandas as pd
-from Bio import SeqIO
-import os
-import pyarrow
+  script:
+  """
+  #!/usr/bin/env python3
+  import pickle
+  import pandas as pd
+  from Bio import SeqIO
+  import os
+  import pyarrow
 
-fileout="pairs_names_seqs.pkl"
-if os.path.exists(fileout):
-  os.remove(fileout)
+  fileout="pairs_names_seqs.pkl"
+  if os.path.exists(fileout):
+    os.remove(fileout)
 
-records_s = list(SeqIO.parse("$srna", "fasta"))
-records_m = list(SeqIO.parse("$mrna", "fasta"))
+  records_s = list(SeqIO.parse("$srna", "fasta"))
+  records_m = list(SeqIO.parse("$mrna", "fasta"))
 
-df = pd.DataFrame(columns=["sRNA_ID","mRNA_ID","sRNA_Sequence","mRNA_Sequence"])
-dictionary_list = []
+  df = pd.DataFrame(columns=["sRNA_ID","mRNA_ID","sRNA_Sequence","mRNA_Sequence"])
+  dictionary_list = []
 
-for i in range(len(records_s)):
-    for j in range(len(records_m)):
-        dictionary_data = {"sRNA_ID": records_s[i].id, "mRNA_ID": records_m[j].id, "sRNA_Sequence": str(records_s[i].seq), "mRNA_Sequence": str(records_m[j].seq)}
-        dictionary_list.append(dictionary_data)
+  for i in range(len(records_s)):
+      for j in range(len(records_m)):
+          dictionary_data = {"sRNA_ID": records_s[i].id, "mRNA_ID": records_m[j].id, "sRNA_Sequence": str(records_s[i].seq), "mRNA_Sequence": str(records_m[j].seq)}
+          dictionary_list.append(dictionary_data)
 
-df = pd.DataFrame.from_dict(dictionary_list)
-df.to_pickle(fileout)
+  df = pd.DataFrame.from_dict(dictionary_list)
+  df.to_pickle(fileout)
 
-"""
+  """
 }
 process1result.into{setResult1; setResult11; setResult111}
 
@@ -58,61 +58,60 @@ process1result.into{setResult1; setResult11; setResult111}
 
 process getsRNATrinucleotidesFrequncies{
 
-output:
-file 'sRNA_3mer.txt' into process2result
+  output:
+  file 'sRNA_3mer.pkl' into process2result
 
-script:
-"""
-#!/usr/bin/env python3
-from skbio import Sequence
-from itertools import product
-import pandas as pd
-import numpy as np
-import pickle
-import os
+  script:
+  """
+  #!/usr/bin/env python3
+  from skbio import Sequence
+  from itertools import product
+  import pandas as pd
+  import numpy as np
+  import pickle
+  import os
 
-def versiontuple(v):
-    return tuple(map(int, (v.split("."))))
+  def versiontuple(v):
+      return tuple(map(int, (v.split("."))))
 
-def all_kmer_subsets(ss=["A", "T", "G", "C"]):
-    return [''.join(p) for p in product(ss, repeat=3)]
+  def all_kmer_subsets(ss=["A", "T", "G", "C"]):
+      return [''.join(p) for p in product(ss, repeat=3)]
 
-kmer_combinations = all_kmer_subsets()
+  kmer_combinations = all_kmer_subsets()
 
-with open("$mrna", 'r') as fp:
-    for count, line in enumerate(fp):
-        pass
-count=int((count+1)/2)
+  with open("$mrna", 'r') as fp:
+      for count, line in enumerate(fp):
+          pass
+  count=int((count+1)/2)
 
-fileout="sRNA_3mer.pkl"
-if os.path.exists(fileout):
-  os.remove(fileout)
+  fileout="sRNA_3mer.pkl"
+  if os.path.exists(fileout):
+    os.remove(fileout)
 
-df = pd.DataFrame(columns=kmer_combinations)
+  df = pd.DataFrame(columns=kmer_combinations)
 
-if versiontuple(pd.__version__) >= versiontuple("1.4.0"):
-   engine="pyarrow"
-else:
-   engine="c"
+  if versiontuple(pd.__version__) >= versiontuple("1.4.0"):
+     engine="pyarrow"
+  else:
+     engine="c"
+     
+  chunksize = 500
+  i=0
+  dictionary_list=[]
+  for chunk in pd.read_csv("$srna", engine=engine, chunksize=chunksize, skiprows=lambda x: (x != 0) and not x % 2):
+    print("Completed", chunksize * i, flush=True)
+    for index, row in chunk.iterrows():
+        s = Sequence(row[0])
+        freqs = s.kmer_frequencies(3, relative=True, overlap=True)
+        dictionary_list.append(freqs)
+    i=i+1
 
+  df = df.append(dictionary_list,ignore_index=True).fillna(0)
+  df = pd.DataFrame(np.repeat(df.values, count, axis=0), columns=kmer_combinations)
+  df = df.round(8) # We round to 5 in last process. Rounding now reduces size and increase performance
+  df.to_pickle(fileout)
 
-chunksize = 500
-i=0
-dictionary_list=[]
-for chunk in pd.read_csv("$srna", engine=engine, chunksize=chunksize, skiprows=lambda x: (x != 0) and not x % 2):
-  print("Completed", chunksize * i, flush=True)
-  for index, row in chunk.iterrows():
-      s = Sequence(row[0])
-      freqs = s.kmer_frequencies(3, relative=True, overlap=True)
-      dictionary_list.append(freqs)
-  i=i+1
-
-df = df.append(dictionary_list,ignore_index=True).fillna(0)
-df = pd.DataFrame(np.repeat(df.values, count, axis=0), columns=kmer_combinations)
-df = df.round(8) # We round to 5 in last process. Rounding now reduces size and increase performance
-df.to_pickle(fileout)
-
-"""
+  """
 }
 
 //Collect file
