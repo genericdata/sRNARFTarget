@@ -90,15 +90,10 @@ process getsRNATrinucleotidesFrequncies{
 
   df = pd.DataFrame(columns=kmer_combinations)
 
-  if versiontuple(pd.__version__) >= versiontuple("1.4.0"):
-     engine="pyarrow"
-  else:
-     engine="c"
-     
   chunksize = 500
   i=0
   dictionary_list=[]
-  for chunk in pd.read_csv("$srna", engine=engine, chunksize=chunksize, skiprows=lambda x: (x != 0) and not x % 2):
+  for chunk in pd.read_csv("$srna", engine='c', chunksize=chunksize, skiprows=lambda x: (x != 0) and not x % 2):
     print("Completed", chunksize * i, flush=True)
     for index, row in chunk.iterrows():
         s = Sequence(row[0])
