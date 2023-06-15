@@ -108,7 +108,7 @@ process getsRNATrinucleotidesFrequncies{
 
   df = df.append(dictionary_list,ignore_index=True).fillna(0)
   df = pd.DataFrame(np.repeat(df.values, count, axis=0), columns=kmer_combinations)
-  df = df.round(8) # We round to 5 in last process. Rounding now reduces size and increase performance
+  df = df.round(9) # We round to 5 in last process. Rounding now reduces size and increase performance
   df.to_pickle(fileout)
 
   """
@@ -148,8 +148,7 @@ process getmRNATrinucleotidesFrequncies{
 
   fileout="mRNA_3mer.txt"
   # Create a 0x64 dataframe
-  dfn = pd.DataFrame(columns=kmer_combinations)
-  header = True
+  df = pd.DataFrame(columns=kmer_combinations)
   chunksize = 100
   seqarr = []
   i=0
@@ -159,16 +158,14 @@ process getmRNATrinucleotidesFrequncies{
           s = Sequence(row[0])
           freqs = s.kmer_frequencies(3, relative=True, overlap=True)
           seqarr.append(freqs)
-          dfn = pd.concat([dfn, pd.DataFrame(freqs, index=[0])], ignore_index=True).fillna(0)
+          df = pd.concat([df, pd.DataFrame(freqs, index=[0])], ignore_index=True).fillna(0)
+          df = df.round(9)
       i=i+1
-
-  print("dataframe =",dfn.shape, flush=True)
-  print("Writing dataframe to", fileout, scount, "times", flush=True)
 
   for x in range(scount):
       if x % 100 == 0:
           print(x , "of" , scount, flush=True)
-      dfn.to_csv(fileout, header=header, mode='a', index=False)
+      df.to_csv(fileout, header=header, mode='a', index=False)
       header = False
 """
 }
@@ -231,41 +228,41 @@ process3Bresult.into{setResult3B; setResult33B}
 
 process runRandomForestModel{
 
-input:
-file diffpkl from setResult3B
-file lrf from ldedmodel
+  input:
+  file diffpkl from setResult3B
+  file lrf from ldedmodel
 
-output:
-file 'Results_pred_probs.npy' into process5result
+  output:
+  file 'Results_pred_probs.npy' into process5result
 
-script:
-"""
-#!/usr/bin/env python3
-import pandas as pd
-import numpy  as np
-import pickle
-import os
-import gc
+  script:
+  """
+  #!/usr/bin/env python3
+  import pandas as pd
+  import numpy  as np
+  import pickle
+  import os
+  import gc
 
-fileout="Results_pred_probs"
-if os.path.exists(fileout + ".npy"):
-  os.remove(fileout + ".npy")
+  fileout="Results_pred_probs"
+  if os.path.exists(fileout + ".npy"):
+    os.remove(fileout + ".npy")
 
-diff = pd.read_pickle(diffpkl)
+  diff = pd.read_pickle(diffpkl)
 
-# load the saved random forest model from disk
-loaded_RFmodel = pickle.load(open(lrf, 'rb'))
+  # load the saved random forest model from disk
+  loaded_RFmodel = pickle.load(open(lrf, 'rb'))
 
-#predict probabilities for class 1
-predict_proba = loaded_RFmodel.predict_proba(diff.fillna(0))
+  #predict probabilities for class 1
+  predict_proba = loaded_RFmodel.predict_proba(diff.fillna(0))
 
-del loaded_RFmodel
-del testdf 
-gc.collect()
+  del loaded_RFmodel
+  del testdf 
+  gc.collect()
 
-#write probabilities to file
-np.save(fileout, predict_proba[:, 1], allow_pickle=True, fix_imports=True)
-"""
+  #write probabilities to file
+  np.save(fileout, predict_proba[:, 1], allow_pickle=True, fix_imports=True)
+  """
 }
 process5result.set{setResult5}
 
@@ -273,34 +270,46 @@ process5result.set{setResult5}
 
 process generateSortedResultFile{
 
-input:
-file mlfile from setResult5
-file ns3file from setResult111
-file difffile from setResult33
+  input:
+  file mlfile from setResult5
+  file ns3file from setResult111
+  file difffile from setResult33B
 
-output:
-file 'Prediction_probabilities.csv' into process6result1
-file 'FeatureFile.csv' into process6result2
+  output:
+  file 'Prediction_probabilities.csv' into process6result1
+  file 'FeatureFile.csv' into process6result2
 
-script:
-"""
-#!/usr/bin/env python3
-import pandas as pd
+  script:
+  """
+  #!/usr/bin/env python3
+  import pandas as pd
+  import pickle
+  import gc
 
-#Generate sorted prediction result file
-df1 = pd.read_csv('$ns3file', sep='\t', header=0)
-df2 = pd.read_csv('$mlfile', sep='\t', header=None)
-df3 = pd.DataFrame(data=df1.iloc[:, 0:2].values,columns=['sRNA_ID', 'mRNA_ID']).assign(Prediction_Probability=df2.round(5))
+  #Generate sorted prediction result file
+  df1 = pd.read_pickle("$ns3file").iloc[:, 0:2] 
+  df2 = pd.DataFrame(np.load(new, mmap_mode=None, allow_pickle=True)).round(5)
+  
+  #TODO: As we round by 5, can we change dtype from default float64 to float32
+  #df2 = pd.DataFrame(np.load(new, mmap_mode=None, allow_pickle=True)).round(5).astype('float32')
 
-df4 = df3.sort_values('Prediction_Probability',ascending=False)
-df4.to_csv('Prediction_probabilities.csv', sep='\t', index=False)
+  df3 = pd.DataFrame(data=df1.values,columns=['sRNA_ID', 'mRNA_ID']).assign(Prediction_Probability=df2)
 
-#Generate feature file with pair ids to be used for interpretability later
-dfp61 = pd.read_csv('$difffile', sep='\t',header = 0) 
-dfp63 = pd.concat([df1.iloc[:, 0:2], dfp61], axis = 1)
-dfp63.to_csv('FeatureFile.csv', header = True, sep='\t', index=False)
+  del df2
 
-"""
+  df4 = df3.sort_values('Prediction_Probability',ascending=False)
+  del df3
+
+  df4.to_csv('Prediction_probabilities.csv', sep='\t', index=False)
+  del df4
+  gc.collect()
+
+  #Generate feature file with pair ids to be used for interpretability later
+  dfp63 = pd.concat([df1, pd.read_pickle("$difffile")], axis = 1)
+  dfp63.to_csv('FeatureFile.csv', header = True, sep='\t', index=False)
+  """
+
+
 }
 
 process6result1.collectFile(name: 'Prediction_probabilities.csv', storeDir:'sRNARFTargetResult')
@@ -310,15 +319,15 @@ process6result2.collectFile(name: 'FeatureFile.csv', storeDir:'sRNARFTargetResul
 //-------------------------summary---------------------------//
 
 workflow.onComplete {
-println(
-"""
-Pipeline execution summary
----------------------------
-Run as : ${workflow.commandLine}
-Completed at: ${workflow.complete}
-Duration : ${workflow.duration}
-Success : ${workflow.success}
-workDir : ${workflow.workDir}
-exit status : ${workflow.exitStatus}
-""")
+  println(
+  """
+  Pipeline execution summary
+  ---------------------------
+  Run as : ${workflow.commandLine}
+  Completed at: ${workflow.complete}
+  Duration : ${workflow.duration}
+  Success : ${workflow.success}
+  workDir : ${workflow.workDir}
+  exit status : ${workflow.exitStatus}
+  """)
 }
