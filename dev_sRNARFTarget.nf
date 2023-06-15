@@ -88,8 +88,6 @@ process getsRNATrinucleotidesFrequncies{
   if os.path.exists(fileout):
     os.remove(fileout)
 
-  df = pd.DataFrame(columns=kmer_combinations)
-
   chunksize = 500
   i=0
   dictionary_list=[]
@@ -100,8 +98,12 @@ process getsRNATrinucleotidesFrequncies{
         freqs = s.kmer_frequencies(3, relative=True, overlap=True)
         dictionary_list.append(freqs)
     i=i+1
-
-  df = df.concat(dictionary_list,ignore_index=True).fillna(0)
+  
+  # Deprecated
+  #df = pd.DataFrame(columns=kmer_combinations)
+  #df = df.append(dictionary_list,ignore_index=True).fillna(0)
+  
+  df = pd.concat([pd.DataFrame(columns=kmer_combinations), pd.DataFrame.from_dict(dictionary_list)]).fillna(0)
   df = pd.DataFrame(np.repeat(df.values, count, axis=0), columns=kmer_combinations)
   df = df.round(9) # We round to 5 in last process. Rounding now reduces size and increase performance
   df.to_pickle(fileout)
