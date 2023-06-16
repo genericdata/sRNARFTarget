@@ -246,10 +246,10 @@ process runRandomForestModel{
   if os.path.exists(fileout + ".npy"):
     os.remove(fileout + ".npy")
 
-  diff = pd.read_pickle(diffpkl)
+  diff = pd.read_pickle("$diffpkl")
 
   # load the saved random forest model from disk
-  loaded_RFmodel = pickle.load(open(lrf, 'rb'))
+  loaded_RFmodel = pickle.load(open("$lrf", 'rb'))
 
   #predict probabilities for class 1
   predict_proba = loaded_RFmodel.predict_proba(diff.fillna(0))
