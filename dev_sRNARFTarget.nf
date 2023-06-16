@@ -286,10 +286,10 @@ process generateSortedResultFile{
 
   #Generate sorted prediction result file
   df1 = pd.read_pickle("$ns3file").iloc[:, 0:2] 
-  df2 = pd.DataFrame(np.load(new, mmap_mode=None, allow_pickle=True)).round(5)
+  df2 = pd.DataFrame(np.load("$mlfile", mmap_mode=None, allow_pickle=True)).round(5)
   
   #TODO: As we round by 5, can we change dtype from default float64 to float32
-  #df2 = pd.DataFrame(np.load(new, mmap_mode=None, allow_pickle=True)).round(5).astype('float32')
+  #df2 = pd.DataFrame(np.load("$mlfile"`, mmap_mode=None, allow_pickle=True)).round(5).astype('float32')
 
   df3 = pd.DataFrame(data=df1.values,columns=['sRNA_ID', 'mRNA_ID']).assign(Prediction_Probability=df2)
 
