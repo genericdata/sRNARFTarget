@@ -255,7 +255,7 @@ process runRandomForestModel{
   predict_proba = loaded_RFmodel.predict_proba(diff.fillna(0))
 
   del loaded_RFmodel
-  del testdf 
+  del diff 
   gc.collect()
 
   #write probabilities to file
