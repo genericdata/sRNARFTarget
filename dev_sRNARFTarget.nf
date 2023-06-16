@@ -158,7 +158,8 @@ process getmRNATrinucleotidesFrequncies{
           df = pd.concat([df, pd.DataFrame(freqs, index=[0])], ignore_index=True).fillna(0)
           df = df.round(9)
       i=i+1
-
+  
+  header = True
   for x in range(scount):
       if x % 100 == 0:
           print(x , "of" , scount, flush=True)
