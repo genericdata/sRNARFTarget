@@ -202,9 +202,9 @@ process getDifference{
   else:
     engine="c"
   
-  mRNAdf = pd.read_csv(mRNas, engine=engine)
+  mRNAdf = pd.read_csv("$mRNas", engine=engine)
   
-  sRNAdf = pd.read_pickle(sRNas)
+  sRNAdf = pd.read_pickle("$sRNas")
   diff = mRNAdf.subtract(sRNAdf)
 
   # Clean up
