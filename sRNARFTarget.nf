@@ -25,7 +25,7 @@ process createAllPossiblePairs{
 
   script:
   """
-  #!/usr/bin/env python3
+  #!/usr/bin/env python
   import pickle
   import pandas as pd
   from Bio import SeqIO
@@ -57,7 +57,7 @@ process1result.into{setResult1; setResult11; setResult111}
 //-------------------------Process_2---------------------------//
 
 process getsRNATrinucleotidesFrequncies{
-
+  
   output:
   file 'sRNA_3mer.pkl' into process2result
 
@@ -88,6 +88,9 @@ process getsRNATrinucleotidesFrequncies{
   if os.path.exists(fileout):
     os.remove(fileout)
 
+  df = pd.DataFrame(columns=kmer_combinations)
+
+     
   chunksize = 500
   i=0
   dictionary_list=[]
@@ -98,14 +101,12 @@ process getsRNATrinucleotidesFrequncies{
         freqs = s.kmer_frequencies(3, relative=True, overlap=True)
         dictionary_list.append(freqs)
     i=i+1
-  
-  # Deprecated
-  #df = pd.DataFrame(columns=kmer_combinations)
-  #df = df.append(dictionary_list,ignore_index=True).fillna(0)
-  
+
+  #df = df.concat(dictionary_list,ignore_index=True).fillna(0)
+  #df = pd.concat([df, dictionary_list, ignore_index=True).fillna(0)
   df = pd.concat([pd.DataFrame(columns=kmer_combinations), pd.DataFrame.from_dict(dictionary_list)]).fillna(0)
   df = pd.DataFrame(np.repeat(df.values, count, axis=0), columns=kmer_combinations)
-  df = df.round(9) # We round to 5 in last process. Rounding now reduces size and increase performance
+  #df = df.round(9) # We round to 5 in last process. Rounding now reduces size and increase performance
   df.to_pickle(fileout)
 
   """
@@ -158,7 +159,7 @@ process getmRNATrinucleotidesFrequncies{
           df = pd.concat([df, pd.DataFrame(freqs, index=[0])], ignore_index=True).fillna(0)
           df = df.round(9)
       i=i+1
-  
+
   header = True
   for x in range(scount):
       if x % 100 == 0:
@@ -290,7 +291,7 @@ process generateSortedResultFile{
   df2 = pd.DataFrame(np.load("$mlfile", mmap_mode=None, allow_pickle=True)).round(5)
   
   #TODO: As we round by 5, can we change dtype from default float64 to float32
-  #df2 = pd.DataFrame(np.load("$mlfile"`, mmap_mode=None, allow_pickle=True)).round(5).astype('float32')
+  #df2 = pd.DataFrame(np.load("$mlfile", mmap_mode=None, allow_pickle=True)).round(5).astype('float32')
 
   df3 = pd.DataFrame(data=df1.values,columns=['sRNA_ID', 'mRNA_ID']).assign(Prediction_Probability=df2)
 
