@@ -30,7 +30,6 @@ process createAllPossiblePairs{
   import pandas as pd
   from Bio import SeqIO
   import os
-  import pyarrow
 
   fileout="pairs_names_seqs.pkl"
   if os.path.exists(fileout):
